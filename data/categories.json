@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cat-makanan",
+    "name": "Makanan & Minuman",
+    "emoji": "🍔",
+    "type": "expense"
+  },
+  {
+    "id": "cat-transport",
+    "name": "Transportasi",
+    "emoji": "🚗",
+    "type": "expense"
+  },
+  {
+    "id": "cat-belanja",
+    "name": "Belanja",
+    "emoji": "🛍️",
+    "type": "expense"
+  },
+  {
+    "id": "cat-hiburan",
+    "name": "Hiburan",
+    "emoji": "🎮",
+    "type": "expense"
+  },
+  {
+    "id": "cat-tagihan",
+    "name": "Tagihan & Utilitas",
+    "emoji": "📄",
+    "type": "expense"
+  },
+  {
+    "id": "cat-kesehatan",
+    "name": "Kesehatan",
+    "emoji": "💊",
+    "type": "expense"
+  },
+  {
+    "id": "cat-investasi",
+    "name": "Investasi",
+    "emoji": "📈",
+    "type": "both"
+  },
+  {
+    "id": "cat-gaji",
+    "name": "Gaji",
+    "emoji": "💰",
+    "type": "income"
+  },
+  {
+    "id": "cat-bonus",
+    "name": "Bonus",
+    "emoji": "✨",
+    "type": "income"
+  },
+  {
+    "id": "cat-lainnya",
+    "name": "Lainnya",
+    "emoji": "❓",
+    "type": "both"
+  }
+]

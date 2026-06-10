@@ -1,0 +1,6 @@
+{
+  "name": "WalletKami",
+  "description": "Real-time Money Tracker for two people using a shared Google Sheets database.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

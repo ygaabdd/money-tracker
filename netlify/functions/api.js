@@ -351,7 +351,14 @@ const syncToSheets = async (config, transactions) => {
 };
 
 const handler = async (event) => {
-  const route = event.path.replace(/^\/api/, "") || "/";
+  let route = event.path || "/";
+  if (route.startsWith("/.netlify/functions/api")) {
+    route = route.replace(/^\/\.netlify\/functions\/api/, "");
+  }
+  if (route.startsWith("/api")) {
+    route = route.replace(/^\/api/, "");
+  }
+  route = route || "/";
   const method = event.httpMethod;
   const body = event.body ? JSON.parse(event.body) : {};
 

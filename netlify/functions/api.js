@@ -87,21 +87,32 @@ const getSupabaseWallets = async () => {
 
 const insertSupabaseWallet = async (wallet) => {
   if (!supabase) return null;
-  const payload = {
+  const common = {
     id: wallet.id,
     name: wallet.name,
     type: wallet.type,
     balance: parseFloat(wallet.balance) || 0,
-    ownerId: wallet.ownerId,
-    owner_id: wallet.ownerId,
     account_id: ACCOUNT_ID,
   };
-  const { data, error } = await supabase.from("wallets").insert([payload]).select().single();
-  if (error) {
-    console.error("insert wallet error:", error);
-    return null;
+
+  const attempts = [
+    { ...common, ownerId: wallet.ownerId, owner_id: wallet.ownerId },
+    { ...common, owner_id: wallet.ownerId },
+    { ...common, ownerId: wallet.ownerId },
+    common,
+  ];
+
+  for (const payload of attempts) {
+    const { data, error } = await supabase.from("wallets").insert([payload]).select().single();
+    if (!error && data) {
+      return data;
+    }
+    if (error) {
+      console.error("insert wallet attempt failed:", payload, error);
+    }
   }
-  return data;
+
+  return null;
 };
 
 const updateSupabaseWallet = async (id, updates) => {

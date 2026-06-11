@@ -515,7 +515,7 @@ export default function App() {
         fetchData(true);
       } else {
         const errorBody = await response.json().catch(() => null);
-        const message = errorBody?.message || 'Gagal menyimpan dompet. Periksa koneksi dan konfigurasi server.';
+        const message = errorBody?.message || errorBody?.error?.message || 'Gagal menyimpan dompet. Periksa koneksi dan konfigurasi server.';
         setErrorBanner(message);
         console.error('Failed saving wallet:', message, errorBody);
       }

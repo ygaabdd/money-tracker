@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Lock, User, Eye, EyeOff, Wallet, Landmark } from 'lucide-react';
+import { apiUrl } from '../api';
 
 interface LoginProps {
   onLoginSuccess: (user: { username: string }) => void;
@@ -25,7 +26,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(apiUrl('/auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

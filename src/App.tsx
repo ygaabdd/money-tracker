@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { Transaction, SheetsConfig, Category, Wallet as CustomWallet, Budget, Debt, CATEGORIES, CustomCategory } from './types';
 import { jsPDF } from 'jspdf';
+import { apiUrl } from './api';
 import Login from './components/Login';
 import TransactionModal from './components/TransactionModal';
 import CategoryChart from './components/CategoryChart';
@@ -204,7 +205,7 @@ export default function App() {
         // Push setup to backend server so both devices can share the same config
         const syncUrlConfigToServer = async () => {
           try {
-            await fetch('/api/sheets-config', {
+            await fetch(apiUrl('/sheets-config'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(sheetsConfig)
@@ -341,12 +342,12 @@ export default function App() {
     if (!silent) setLoading(true);
     try {
       const [txResponse, configResponse, walletResponse, budgetResponse, debtResponse, categoryResponse] = await Promise.all([
-        fetch('/api/transactions'),
-        fetch('/api/sheets-config'),
-        fetch('/api/wallets'),
-        fetch('/api/budgets'),
-        fetch('/api/debts'),
-        fetch('/api/categories'),
+        fetch(apiUrl('/transactions')),
+        fetch(apiUrl('/sheets-config')),
+        fetch(apiUrl('/wallets')),
+        fetch(apiUrl('/budgets')),
+        fetch(apiUrl('/debts')),
+        fetch(apiUrl('/categories')),
       ]);
 
       if (txResponse.ok) {
@@ -460,7 +461,7 @@ export default function App() {
     setSheetsConfig(prev => ({ ...prev, activeUserIdentity: identity }));
 
     try {
-      await fetch('/api/sheets-config', {
+      await fetch(apiUrl('/sheets-config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ activeUserIdentity: identity }),
@@ -485,7 +486,7 @@ export default function App() {
       ...updates,
     };
     try {
-      const response = await fetch('/api/sheets-config', {
+      const response = await fetch(apiUrl('/sheets-config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
@@ -503,7 +504,7 @@ export default function App() {
   const handleSaveWallet = async (name: string, type: string, balance: number, id?: string, ownerId?: 'Ry' | 'Partner') => {
     try {
       const isEditing = !!id;
-      const url = isEditing ? `/api/wallets/${id}` : '/api/wallets';
+      const url = isEditing ? apiUrl(`/wallets/${id}`) : apiUrl('/wallets');
       const method = isEditing ? 'PUT' : 'POST';
       const response = await fetch(url, {
         method,
@@ -521,7 +522,7 @@ export default function App() {
   const handleDeleteWallet = async (id: string, name: string) => {
     if (!window.confirm(`Hapus dompet "${name}"?`)) return;
     try {
-      const response = await fetch(`/api/wallets/${id}`, {
+      const response = await fetch(apiUrl(`/wallets/${id}`), {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -554,7 +555,7 @@ export default function App() {
   const handleDeleteBudget = async (id: string, category: string) => {
     if (!window.confirm(`Hapus anggaran untuk kategori "${category}"?`)) return;
     try {
-      const response = await fetch(`/api/budgets/${id}`, {
+      const response = await fetch(apiUrl(`/budgets/${id}`), {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -568,7 +569,7 @@ export default function App() {
   // Custom Category Handlers
   const handleSaveCategory = async (name: string, emoji: string, type: 'income' | 'expense' | 'both') => {
     try {
-      const response = await fetch('/api/categories', {
+      const response = await fetch(apiUrl('/categories'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, emoji, type }),
@@ -584,7 +585,7 @@ export default function App() {
   const handleDeleteCategory = async (id: string, name: string) => {
     if (!window.confirm(`Hapus kategori "${name}" secara permanen?`)) return;
     try {
-      const response = await fetch(`/api/categories/${id}`, {
+      const response = await fetch(apiUrl(`/categories/${id}`), {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -616,7 +617,7 @@ export default function App() {
 
   const handleUpdateDebtStatus = async (id: string, status: 'unpaid' | 'paid') => {
     try {
-      const response = await fetch(`/api/debts/${id}`, {
+      const response = await fetch(apiUrl(`/debts/${id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -632,7 +633,7 @@ export default function App() {
   const handleDeleteDebt = async (id: string, title: string) => {
     if (!window.confirm(`Hapus catatan hutang "${title}"?`)) return;
     try {
-      const response = await fetch(`/api/debts/${id}`, {
+      const response = await fetch(apiUrl(`/debts/${id}`), {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -683,7 +684,7 @@ export default function App() {
   const handleDeleteTransaction = async (id: string, description: string) => {
     if (!window.confirm(`Hapus transaksi "${description}" secara permanen?`)) return;
     try {
-      const response = await fetch(`/api/transactions/${id}`, {
+      const response = await fetch(apiUrl(`/transactions/${id}`), {
         method: 'DELETE',
       });
 
@@ -929,7 +930,7 @@ export default function App() {
   const createGoogleSheetsDatabase = async (token: string) => {
     setSyncingSheets(true);
     try {
-      const response = await fetch('/api/sheets/create', {
+const response = await fetch(apiUrl('/sheets/create'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken: token }),

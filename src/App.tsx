@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { createClient } from '@supabase/supabase-js';
 import {
   Wallet,
   Coins,
@@ -37,17 +38,17 @@ import SheetsPanel from './components/SheetsPanel';
 import TransactionSuccessModal from './components/TransactionSuccessModal';
 import BudgetCategoryModal from './components/BudgetCategoryModal';
 
+// Initialize Supabase Client
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+
 export default function App() {
   // Authentication State
-  const [user, setUser] = useState<{ username: string } | null>(() => {
-    const saved = localStorage.getItem('money_tracker_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState<{ username: string } | null>(null);
 
   // Active identity selected (to support 2 people on the same account)
-  const [activeUserIdentity, setActiveUserIdentity] = useState<'Ry' | 'Partner'>(() => {
-    return (localStorage.getItem('money_tracker_active_identity') as 'Ry' | 'Partner') || 'Ry';
-  });
+  const [activeUserIdentity, setActiveUserIdentity] = useState<'Ry' | 'Partner'>('Ry');
 
   // Data States
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -62,16 +63,10 @@ export default function App() {
       user1Wallet: 500000,
       user2Name: 'Partner',
       user2Wallet: 2500000,
+      activeUserIdentity: 'Ry',
     };
 
     if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('money_tracker_sheets_config');
-        if (saved) {
-          initialConfig = JSON.parse(saved);
-        }
-      } catch (_) {}
-
       try {
         const params = new URLSearchParams(window.location.search);
         const urlSpreadsheetId = params.get('spreadsheetId') || params.get('sid');
@@ -87,7 +82,6 @@ export default function App() {
             user1Name: urlUser1Name ? decodeURIComponent(urlUser1Name) : initialConfig.user1Name,
             user2Name: urlUser2Name ? decodeURIComponent(urlUser2Name) : initialConfig.user2Name,
           };
-          localStorage.setItem('money_tracker_sheets_config', JSON.stringify(initialConfig));
         }
       } catch (_) {}
     }
@@ -113,13 +107,6 @@ export default function App() {
 
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('money_tracker_wallets');
-        if (saved) {
-          initialWallets = JSON.parse(saved);
-        }
-      } catch (_) {}
-
-      try {
         const params = new URLSearchParams(window.location.search);
         const urlUser1Name = params.get('user1Name') || params.get('u1');
         const urlUser2Name = params.get('user2Name') || params.get('u2');
@@ -134,7 +121,6 @@ export default function App() {
             }
             return w;
           });
-          localStorage.setItem('money_tracker_wallets', JSON.stringify(initialWallets));
         }
       } catch (_) {}
     }
@@ -170,12 +156,6 @@ export default function App() {
         const params = new URLSearchParams(window.location.search);
         const urlUser1Name = params.get('user1Name') || params.get('u1');
         if (urlUser1Name) return decodeURIComponent(urlUser1Name);
-
-        const saved = localStorage.getItem('money_tracker_sheets_config');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.user1Name) return parsed.user1Name;
-        }
       } catch (_) {}
     }
     return 'Ry';
@@ -186,12 +166,6 @@ export default function App() {
         const params = new URLSearchParams(window.location.search);
         const urlUser2Name = params.get('user2Name') || params.get('u2');
         if (urlUser2Name) return decodeURIComponent(urlUser2Name);
-
-        const saved = localStorage.getItem('money_tracker_sheets_config');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.user2Name) return parsed.user2Name;
-        }
       } catch (_) {}
     }
     return 'Partner';
@@ -213,51 +187,6 @@ export default function App() {
   // Budget & Category customizable FAB Modal
   const [isBudgetCategoryModalOpen, setIsBudgetCategoryModalOpen] = useState(false);
 
-  // Hybrid client-side offline mode compatibility (e.g. for static deployment platforms like Netlify)
-  const [isLocalStorageMode, setIsLocalStorageMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const isStaticHost = window.location.hostname.endsWith('.netlify.app') || 
-                           window.location.hostname.endsWith('.vercel.app') || 
-                           window.location.hostname.endsWith('.github.io') ||
-                           window.location.hostname.includes('netlify') ||
-                           window.location.hostname.includes('vercel');
-      return isStaticHost;
-    }
-    return false;
-  });
-
-  // LocalStorage generic persistent readers & writers
-  const getLocalStorageItem = <T,>(key: string, defaultValue: T): T => {
-    try {
-      const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : defaultValue;
-    } catch {
-      return defaultValue;
-    }
-  };
-
-  const setLocalStorageItem = <T,>(key: string, value: T) => {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (e) {
-      console.error('Error saving to localStorage:', e);
-    }
-  };
-
-  // Perform quick health check to dynamically switch to localStorage fallback on active server failure
-  useEffect(() => {
-    const checkServerHealth = async () => {
-      try {
-        const res = await fetch('/api/health');
-        if (!res.ok) {
-          setIsLocalStorageMode(true);
-        }
-      } catch (e) {
-        setIsLocalStorageMode(true);
-      }
-    };
-    checkServerHealth();
-  }, []);
 
   // Load and synchronize config from URL query parameters (useful for sharing configs across devices easily!)
   useEffect(() => {
@@ -272,18 +201,16 @@ export default function App() {
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
 
-        // If we are in server mode, push setup to backend server so both see the same setup
+        // Push setup to backend server so both devices can share the same config
         const syncUrlConfigToServer = async () => {
-          if (!isLocalStorageMode) {
-            try {
-              await fetch('/api/sheets-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(sheetsConfig)
-              });
-            } catch (err) {
-              console.warn('Silent server config save on link load failed:', err);
-            }
+          try {
+            await fetch('/api/sheets-config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(sheetsConfig)
+            });
+          } catch (err) {
+            console.warn('Silent server config save on link load failed:', err);
           }
           if (user) {
             fetchData();
@@ -293,16 +220,21 @@ export default function App() {
         syncUrlConfigToServer();
       }
     }
-  }, [user, isLocalStorageMode]);
+  }, [user]);
 
   // Silent background sync from Google Sheets to support true multiple devices real-time database sync
   const syncFromSheetsSilent = async (token: string, spreadsheetId: string) => {
     if (!token || !spreadsheetId) return;
     try {
       const cleanId = spreadsheetId.trim();
-      const txRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/Transaksi!A2:H1000`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const [txRes, dompetRes] = await Promise.all([
+        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/Transaksi!A2:H1000`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/Dompet!A2:C10`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
 
       if (txRes.ok) {
         const txData = await txRes.json();
@@ -320,80 +252,62 @@ export default function App() {
         setTransactions(prevTxs => {
           const prevSerialized = JSON.stringify(prevTxs);
           const nextSerialized = JSON.stringify(sheetTxs);
-          if (prevSerialized !== nextSerialized) {
-            setLocalStorageItem('money_tracker_transactions', sheetTxs);
-            return sheetTxs;
-          }
-          return prevTxs;
+          return prevSerialized !== nextSerialized ? sheetTxs : prevTxs;
         });
       }
 
-      const dompetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/Dompet!A2:C10`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       if (dompetRes.ok) {
         const dData = await dompetRes.json();
         const vals = dData.values || [];
         const user1Row = vals.find((r: any) => r[0] === 'user1');
         const user2Row = vals.find((r: any) => r[0] === 'user2');
 
-        setSheetsConfig(prevConfig => {
-          let updatedUser1Wallet = prevConfig.user1Wallet;
-          let updatedUser2Wallet = prevConfig.user2Wallet;
-          let updatedUser1Name = prevConfig.user1Name;
-          let updatedUser2Name = prevConfig.user2Name;
-          let hasDiff = false;
+        let updatedUser1Name = sheetsConfig.user1Name;
+        let updatedUser1Wallet = sheetsConfig.user1Wallet;
+        let updatedUser2Name = sheetsConfig.user2Name;
+        let updatedUser2Wallet = sheetsConfig.user2Wallet;
 
-          if (user1Row) {
-            const u1Name = user1Row[1] || prevConfig.user1Name;
-            const u1W = parseFloat(user1Row[2]) !== undefined && !isNaN(parseFloat(user1Row[2])) ? parseFloat(user1Row[2]) : prevConfig.user1Wallet;
-            if (u1Name !== prevConfig.user1Name || u1W !== prevConfig.user1Wallet) {
-              updatedUser1Name = u1Name;
-              updatedUser1Wallet = u1W;
-              hasDiff = true;
+        if (user1Row) {
+          updatedUser1Name = user1Row[1] || updatedUser1Name;
+          const parsed = parseFloat(user1Row[2]);
+          if (!isNaN(parsed)) updatedUser1Wallet = parsed;
+        }
+        if (user2Row) {
+          updatedUser2Name = user2Row[1] || updatedUser2Name;
+          const parsed = parseFloat(user2Row[2]);
+          if (!isNaN(parsed)) updatedUser2Wallet = parsed;
+        }
+
+        const shouldUpdateConfig =
+          updatedUser1Name !== sheetsConfig.user1Name ||
+          updatedUser1Wallet !== sheetsConfig.user1Wallet ||
+          updatedUser2Name !== sheetsConfig.user2Name ||
+          updatedUser2Wallet !== sheetsConfig.user2Wallet;
+
+        if (shouldUpdateConfig) {
+          const newConfig = {
+            ...sheetsConfig,
+            user1Name: updatedUser1Name,
+            user1Wallet: updatedUser1Wallet,
+            user2Name: updatedUser2Name,
+            user2Wallet: updatedUser2Wallet,
+          };
+
+          setSheetsConfig(newConfig);
+          setWallets(prevWallets => prevWallets.map(w => {
+            if (w.ownerId === 'Ry') {
+              return { ...w, name: updatedUser1Name, balance: updatedUser1Wallet };
             }
-          }
-          if (user2Row) {
-            const u2Name = user2Row[1] || prevConfig.user2Name;
-            const u2W = parseFloat(user2Row[2]) !== undefined && !isNaN(parseFloat(user2Row[2])) ? parseFloat(user2Row[2]) : prevConfig.user2Wallet;
-            if (u2Name !== prevConfig.user2Name || u2W !== prevConfig.user2Wallet) {
-              updatedUser2Name = u2Name;
-              updatedUser2Wallet = u2W;
-              hasDiff = true;
+            if (w.ownerId === 'Partner') {
+              return { ...w, name: updatedUser2Name, balance: updatedUser2Wallet };
             }
-          }
-
-          if (hasDiff) {
-            const newConfig = {
-              ...prevConfig,
-              user1Name: updatedUser1Name,
-              user1Wallet: updatedUser1Wallet,
-              user2Name: updatedUser2Name,
-              user2Wallet: updatedUser2Wallet,
-            };
-            setLocalStorageItem('money_tracker_sheets_config', newConfig);
-
-            // Update wallets
-            setWallets(prevWallets => {
-              const updatedWallets = prevWallets.map(w => {
-                if (w.ownerId === 'Ry') {
-                  return { ...w, name: updatedUser1Name, balance: updatedUser1Wallet };
-                }
-                if (w.ownerId === 'Partner') {
-                  return { ...w, name: updatedUser2Name, balance: updatedUser2Wallet };
-                }
-                return w;
-              });
-              setLocalStorageItem('money_tracker_wallets', updatedWallets);
-              return updatedWallets;
-            });
-
-            return newConfig;
-          }
-          return prevConfig;
-        });
+            return w;
+          }));
+        }
       }
-    } catch (_) {}
+    } catch (error) {
+      console.warn('Silent Sheets sync failed:', error);
+    }
   };
 
   // Background polling every 15 seconds if Google Sheets is connected
@@ -426,59 +340,6 @@ export default function App() {
   const fetchData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      if (isLocalStorageMode) {
-        // 1. Categories
-        const localCats = getLocalStorageItem<CustomCategory[]>('money_tracker_categories', [
-          { id: "cat-makanan", name: "Makanan & Minuman", emoji: "🍔", type: "expense" },
-          { id: "cat-transport", name: "Transportasi", emoji: "🚗", type: "expense" },
-          { id: "cat-belanja", name: "Belanja", emoji: "🛍️", type: "expense" },
-          { id: "cat-hiburan", name: "Hiburan", emoji: "🎮", type: "expense" },
-          { id: "cat-tagihan", name: "Tagihan & Utilitas", emoji: "📄", type: "expense" },
-          { id: "cat-kesehatan", name: "Kesehatan", emoji: "💊", type: "expense" },
-          { id: "cat-investasi", name: "Investasi", emoji: "📈", type: "both" },
-          { id: "cat-gaji", name: "Gaji", emoji: "💰", type: "income" },
-          { id: "cat-bonus", name: "Bonus", emoji: "✨", type: "income" },
-          { id: "cat-lainnya", name: "Lainnya", emoji: "❓", type: "both" }
-        ]);
-        setCategories(localCats);
-
-        // 2. Wallets
-        const localWallets = getLocalStorageItem<CustomWallet[]>('money_tracker_wallets', [
-          { id: "w-1", name: "Dompet Utama", type: "Tunai", balance: 500000, ownerId: "Ry" },
-          { id: "w-2", name: "Rekening Bank", type: "Rekening Bank", balance: 2500000, ownerId: "Partner" }
-        ]);
-        setWallets(localWallets);
-
-        // 3. Budgets
-        const localBudgets = getLocalStorageItem<Budget[]>('money_tracker_budgets', []);
-        setBudgets(localBudgets);
-
-        // 4. Debts
-        const localDebts = getLocalStorageItem<Debt[]>('money_tracker_debts', []);
-        setDebts(localDebts);
-
-        // 5. Sheets Config
-        const localConfig = getLocalStorageItem<SheetsConfig>('money_tracker_sheets_config', {
-          connected: false,
-          spreadsheetId: '',
-          sheetName: 'Transaksi',
-          spreadsheetUrl: '',
-          lastSyncedAt: '',
-          user1Name: 'Ry',
-          user1Wallet: 500000,
-          user2Name: 'Partner',
-          user2Wallet: 2500000,
-        });
-        setSheetsConfig(localConfig);
-
-        // 6. Transactions
-        const localTxs = getLocalStorageItem<Transaction[]>('money_tracker_transactions', []);
-        setTransactions(localTxs);
-
-        if (!silent) setLoading(false);
-        return;
-      }
-
       const [txResponse, configResponse, walletResponse, budgetResponse, debtResponse, categoryResponse] = await Promise.all([
         fetch('/api/transactions'),
         fetch('/api/sheets-config'),
@@ -499,6 +360,9 @@ export default function App() {
         const configData = await configResponse.json();
         if (configData.success) {
           setSheetsConfig(configData.config);
+          if (configData.config?.activeUserIdentity) {
+            setActiveUserIdentity(configData.config.activeUserIdentity);
+          }
         }
       }
 
@@ -556,23 +420,62 @@ export default function App() {
     }
   }, [user]);
 
-  // Sync state helpers to localStorage for better preservation of displays
+  // Setup Realtime Subscriptions for instant sync across devices
+  useEffect(() => {
+    if (!user || !supabase) return;
+    const subscriptions: any[] = [];
+    try {
+      const handleDataChange = () => fetchData(true);
+      const txSub = supabase.channel('transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, handleDataChange).subscribe();
+      const walletSub = supabase.channel('wallets').on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, handleDataChange).subscribe();
+      const budgetSub = supabase.channel('budgets').on('postgres_changes', { event: '*', schema: 'public', table: 'budgets' }, handleDataChange).subscribe();
+      const debtSub = supabase.channel('debts').on('postgres_changes', { event: '*', schema: 'public', table: 'debts' }, handleDataChange).subscribe();
+      const categorySub = supabase.channel('categories').on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, handleDataChange).subscribe();
+      subscriptions.push(txSub, walletSub, budgetSub, debtSub, categorySub);
+      console.log('Realtime subscriptions active');
+    } catch (err) {
+      console.warn('Realtime subscriptions failed:', err);
+    }
+    return () => {
+      subscriptions.forEach((sub) => supabase?.removeChannel(sub));
+    };
+  }, [user]);
+
   const handleLoginSuccess = (userData: { username: string }) => {
-    localStorage.setItem('money_tracker_user', JSON.stringify(userData));
     setUser(userData);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('money_tracker_user');
-    localStorage.removeItem('money_tracker_active_identity');
     setUser(null);
     // Erase transactions and reset states
     setTransactions([]);
+    setWallets([]);
+    setBudgets([]);
+    setDebts([]);
+    setCategories([]);
   };
 
-  const switchActiveIdentity = (identity: 'Ry' | 'Partner') => {
-    localStorage.setItem('money_tracker_active_identity', identity);
+  const switchActiveIdentity = async (identity: 'Ry' | 'Partner') => {
     setActiveUserIdentity(identity);
+    setSheetsConfig(prev => ({ ...prev, activeUserIdentity: identity }));
+
+    try {
+      await fetch('/api/sheets-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeUserIdentity: identity }),
+      });
+    } catch (err) {
+      console.warn('Failed to persist active user identity:', err);
+    }
+
+    // Force refresh data from server when switching user
+    setTransactions([]);
+    setWallets([]);
+    setBudgets([]);
+    setDebts([]);
+    setCategories([]);
+    fetchData(false);
   };
 
   // Core Mutation Handlers (Call Express Backend API)
@@ -581,11 +484,6 @@ export default function App() {
       ...sheetsConfig,
       ...updates,
     };
-    if (isLocalStorageMode) {
-      setSheetsConfig(updated);
-      setLocalStorageItem('money_tracker_sheets_config', updated);
-      return;
-    }
     try {
       const response = await fetch('/api/sheets-config', {
         method: 'POST',
@@ -603,24 +501,6 @@ export default function App() {
 
   // Custom Wallet Handlers
   const handleSaveWallet = async (name: string, type: string, balance: number, id?: string, ownerId?: 'Ry' | 'Partner') => {
-    if (isLocalStorageMode) {
-      let currentWallets = [...wallets];
-      if (id) {
-        currentWallets = currentWallets.map(w => w.id === id ? { ...w, name, type, balance, ownerId: ownerId || w.ownerId } : w);
-      } else {
-        const newW: CustomWallet = {
-          id: 'w-' + Date.now().toString(),
-          name,
-          type,
-          balance,
-          ownerId: ownerId || 'Ry'
-        };
-        currentWallets.push(newW);
-      }
-      setWallets(currentWallets);
-      setLocalStorageItem('money_tracker_wallets', currentWallets);
-      return;
-    }
     try {
       const isEditing = !!id;
       const url = isEditing ? `/api/wallets/${id}` : '/api/wallets';
@@ -640,12 +520,6 @@ export default function App() {
 
   const handleDeleteWallet = async (id: string, name: string) => {
     if (!window.confirm(`Hapus dompet "${name}"?`)) return;
-    if (isLocalStorageMode) {
-      const currentWallets = wallets.filter(w => w.id !== id);
-      setWallets(currentWallets);
-      setLocalStorageItem('money_tracker_wallets', currentWallets);
-      return;
-    }
     try {
       const response = await fetch(`/api/wallets/${id}`, {
         method: 'DELETE',
@@ -660,22 +534,6 @@ export default function App() {
 
   // Custom Budget Handlers
   const handleSaveBudget = async (category: string, limit: number, id?: string) => {
-    if (isLocalStorageMode) {
-      let currentBudgets = [...budgets];
-      if (id) {
-        currentBudgets = currentBudgets.map(b => b.id === id ? { ...b, category, limit } : b);
-      } else {
-        const newB: Budget = {
-          id: 'b-' + Date.now().toString(),
-          category,
-          limit
-        };
-        currentBudgets.push(newB);
-      }
-      setBudgets(currentBudgets);
-      setLocalStorageItem('money_tracker_budgets', currentBudgets);
-      return;
-    }
     try {
       const isEditing = !!id;
       const url = isEditing ? `/api/budgets/${id}` : '/api/budgets';
@@ -695,12 +553,6 @@ export default function App() {
 
   const handleDeleteBudget = async (id: string, category: string) => {
     if (!window.confirm(`Hapus anggaran untuk kategori "${category}"?`)) return;
-    if (isLocalStorageMode) {
-      const currentBudgets = budgets.filter(b => b.id !== id);
-      setBudgets(currentBudgets);
-      setLocalStorageItem('money_tracker_budgets', currentBudgets);
-      return;
-    }
     try {
       const response = await fetch(`/api/budgets/${id}`, {
         method: 'DELETE',
@@ -715,19 +567,6 @@ export default function App() {
 
   // Custom Category Handlers
   const handleSaveCategory = async (name: string, emoji: string, type: 'income' | 'expense' | 'both') => {
-    if (isLocalStorageMode) {
-      const currentCats = [...categories];
-      const newC: CustomCategory = {
-        id: 'c-' + Date.now().toString(),
-        name,
-        emoji,
-        type
-      };
-      currentCats.push(newC);
-      setCategories(currentCats);
-      setLocalStorageItem('money_tracker_categories', currentCats);
-      return;
-    }
     try {
       const response = await fetch('/api/categories', {
         method: 'POST',
@@ -744,12 +583,6 @@ export default function App() {
 
   const handleDeleteCategory = async (id: string, name: string) => {
     if (!window.confirm(`Hapus kategori "${name}" secara permanen?`)) return;
-    if (isLocalStorageMode) {
-      const currentCats = categories.filter(c => c.id !== id);
-      setCategories(currentCats);
-      setLocalStorageItem('money_tracker_categories', currentCats);
-      return;
-    }
     try {
       const response = await fetch(`/api/categories/${id}`, {
         method: 'DELETE',
@@ -764,26 +597,6 @@ export default function App() {
 
   // Custom Debt Handlers
   const handleSaveDebt = async (title: string, amount: number, person: string, type: 'debt' | 'receivable', date: string, id?: string) => {
-    if (isLocalStorageMode) {
-      let currentDebts = [...debts];
-      if (id) {
-        currentDebts = currentDebts.map(d => d.id === id ? { ...d, title, amount, person, type, date } : d);
-      } else {
-        const newD: Debt = {
-          id: 'd-' + Date.now().toString(),
-          title,
-          amount,
-          person,
-          type,
-          status: 'unpaid',
-          date
-        };
-        currentDebts.push(newD);
-      }
-      setDebts(currentDebts);
-      setLocalStorageItem('money_tracker_debts', currentDebts);
-      return;
-    }
     try {
       const isEditing = !!id;
       const url = isEditing ? `/api/debts/${id}` : '/api/debts';
@@ -802,12 +615,6 @@ export default function App() {
   };
 
   const handleUpdateDebtStatus = async (id: string, status: 'unpaid' | 'paid') => {
-    if (isLocalStorageMode) {
-      const currentDebts = debts.map(d => d.id === id ? { ...d, status } : d);
-      setDebts(currentDebts);
-      setLocalStorageItem('money_tracker_debts', currentDebts);
-      return;
-    }
     try {
       const response = await fetch(`/api/debts/${id}`, {
         method: 'PUT',
@@ -824,12 +631,6 @@ export default function App() {
 
   const handleDeleteDebt = async (id: string, title: string) => {
     if (!window.confirm(`Hapus catatan hutang "${title}"?`)) return;
-    if (isLocalStorageMode) {
-      const currentDebts = debts.filter(d => d.id !== id);
-      setDebts(currentDebts);
-      setLocalStorageItem('money_tracker_debts', currentDebts);
-      return;
-    }
     try {
       const response = await fetch(`/api/debts/${id}`, {
         method: 'DELETE',
@@ -843,89 +644,6 @@ export default function App() {
   };
 
   const handleSaveTransaction = async (txData: Omit<Transaction, 'createdAt'> & { id?: string }) => {
-    if (isLocalStorageMode) {
-      let currentTxs = [...transactions];
-      const isEditing = !!editTarget;
-
-      const finalTx: Transaction = {
-        id: txData.id || String(Date.now()),
-        amount: txData.amount,
-        type: txData.type,
-        description: txData.description,
-        category: txData.category,
-        date: txData.date,
-        addedBy: txData.addedBy,
-        walletId: txData.walletId,
-        createdAt: new Date().toISOString()
-      };
-
-      if (isEditing) {
-        // Revert wallet impact of old tx
-        const oldTx = transactions.find(t => t.id === txData.id);
-        let currentWallets = [...wallets];
-        if (oldTx && oldTx.walletId) {
-          currentWallets = currentWallets.map(w => {
-            if (w.id === oldTx.walletId) {
-              const oldAmt = oldTx.amount;
-              return {
-                ...w,
-                balance: oldTx.type === 'income' ? w.balance - oldAmt : w.balance + oldAmt
-              };
-            }
-            return w;
-          });
-        }
-        // Apply wallet impact of new tx
-        if (finalTx.walletId) {
-          currentWallets = currentWallets.map(w => {
-            if (w.id === finalTx.walletId) {
-              const newAmt = finalTx.amount;
-              return {
-                ...w,
-                balance: finalTx.type === 'income' ? w.balance + newAmt : w.balance - newAmt
-              };
-            }
-            return w;
-          });
-        }
-        setWallets(currentWallets);
-        setLocalStorageItem('money_tracker_wallets', currentWallets);
-
-        currentTxs = currentTxs.map(t => t.id === txData.id ? finalTx : t);
-      } else {
-        // Apply wallet balance
-        if (finalTx.walletId) {
-          const currentWallets = wallets.map(w => {
-            if (w.id === finalTx.walletId) {
-              const amt = finalTx.amount;
-              return {
-                ...w,
-                balance: finalTx.type === 'income' ? w.balance + amt : w.balance - amt
-              };
-            }
-            return w;
-          });
-          setWallets(currentWallets);
-          setLocalStorageItem('money_tracker_wallets', currentWallets);
-        }
-
-        currentTxs.unshift(finalTx);
-      }
-
-      setTransactions(currentTxs);
-      setLocalStorageItem('money_tracker_transactions', currentTxs);
-
-      setLastSavedTx(finalTx);
-      setIsSuccessModalOpen(true);
-      setEditTarget(null);
-
-      if (sheetsConfig.connected && sheetsConfig.spreadsheetId && sheetsConfig.accessToken) {
-        syncToSheetsClient(sheetsConfig.spreadsheetId, sheetsConfig.accessToken, currentTxs, sheetsConfig).catch(err => {
-          console.warn('Silent auto-sync of transactions failed:', err);
-        });
-      }
-      return;
-    }
     try {
       const isEditing = !!editTarget;
       const url = isEditing ? `/api/transactions/${txData.id}` : '/api/transactions';
@@ -964,35 +682,6 @@ export default function App() {
 
   const handleDeleteTransaction = async (id: string, description: string) => {
     if (!window.confirm(`Hapus transaksi "${description}" secara permanen?`)) return;
-    if (isLocalStorageMode) {
-      const txToDelete = transactions.find(t => t.id === id);
-      if (txToDelete && txToDelete.walletId) {
-        const currentWallets = wallets.map(w => {
-          if (w.id === txToDelete.walletId) {
-            const amt = txToDelete.amount;
-            return {
-              ...w,
-              balance: txToDelete.type === 'income' ? w.balance - amt : w.balance + amt
-            };
-          }
-          return w;
-        });
-        setWallets(currentWallets);
-        setLocalStorageItem('money_tracker_wallets', currentWallets);
-      }
-
-      const currentTxs = transactions.filter(t => t.id !== id);
-      setTransactions(currentTxs);
-      setLocalStorageItem('money_tracker_transactions', currentTxs);
-
-      if (sheetsConfig.connected && sheetsConfig.spreadsheetId && sheetsConfig.accessToken) {
-        syncToSheetsClient(sheetsConfig.spreadsheetId, sheetsConfig.accessToken, currentTxs, sheetsConfig).catch(err => {
-          console.warn('Silent auto-sync on delete failed:', err);
-        });
-      }
-      return;
-    }
-
     try {
       const response = await fetch(`/api/transactions/${id}`, {
         method: 'DELETE',
@@ -1163,7 +852,6 @@ export default function App() {
       };
 
       setSheetsConfig(newConfig);
-      setLocalStorageItem('money_tracker_sheets_config', newConfig);
 
       // Fetch existing transactions from Google Sheets immediately to load them!
       const txRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/Transaksi!A2:H1000`, {
@@ -1185,7 +873,6 @@ export default function App() {
 
         if (sheetTxs.length > 0) {
           setTransactions(sheetTxs);
-          setLocalStorageItem('money_tracker_transactions', sheetTxs);
         } else if (transactions.length > 0) {
           // If sheet is empty, push existing local transactions to sheets to sync them!
           await syncToSheetsClient(cleanId, token, transactions, newConfig);
@@ -1226,10 +913,8 @@ export default function App() {
         });
 
         setWallets(updatedWallets);
-        setLocalStorageItem('money_tracker_wallets', updatedWallets);
 
         setSheetsConfig({ ...newConfig });
-        setLocalStorageItem('money_tracker_sheets_config', newConfig);
       }
 
     } catch (err: any) {
@@ -1244,82 +929,6 @@ export default function App() {
   const createGoogleSheetsDatabase = async (token: string) => {
     setSyncingSheets(true);
     try {
-      if (isLocalStorageMode) {
-        const createRes = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            properties: {
-              title: "Money Tracker - Akun Bersama",
-            },
-            sheets: [
-              { properties: { title: "Transaksi" } },
-              { properties: { title: "Dompet" } },
-            ],
-          }),
-        });
-
-        if (!createRes.ok) {
-          const errText = await createRes.text();
-          console.error("Sheets API error:", errText);
-          throw new Error("Gagal membuat spreadsheet baru di akun Google Anda via API.");
-        }
-
-        const data = await createRes.json();
-        const spreadsheetId = data.spreadsheetId;
-
-        // Initialize Transaksi Tab Headers
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Transaksi!A1:H1?valueInputOption=USER_ENTERED`, {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            values: [["ID", "Tanggal", "Deskripsi", "Kategori", "Tipe", "Jumlah", "Ditambahkan Oleh", "Waktu Input"]],
-          }),
-        });
-
-        // Initialize Dompet Tab Headers and Initial profiles
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Dompet!A1:C3?valueInputOption=USER_ENTERED`, {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            values: [
-              ["ID_User", "Nama_User", "Saldo_Dompet"],
-              ["user1", sheetsConfig.user1Name || "Ry", sheetsConfig.user1Wallet || 500000],
-              ["user2", sheetsConfig.user2Name || "Partner", sheetsConfig.user2Wallet || 2500000]
-            ],
-          }),
-        });
-
-        const newConfig: SheetsConfig = {
-          connected: true,
-          spreadsheetId,
-          sheetName: "Transaksi",
-          spreadsheetUrl: data.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
-          lastSyncedAt: new Date().toISOString(),
-          accessToken: token,
-          user1Name: sheetsConfig.user1Name || 'Ry',
-          user1Wallet: sheetsConfig.user1Wallet || 500000,
-          user2Name: sheetsConfig.user2Name || 'Partner',
-          user2Wallet: sheetsConfig.user2Wallet || 2500000,
-        };
-
-        setSheetsConfig(newConfig);
-        setLocalStorageItem('money_tracker_sheets_config', newConfig);
-
-        // Sync initial data
-        await syncToSheetsClient(spreadsheetId, token, transactions, newConfig);
-        return;
-      }
-
       const response = await fetch('/api/sheets/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1340,79 +949,64 @@ export default function App() {
   const syncToGoogleSheets = async (token: string, silent = false) => {
     if (!silent) setSyncingSheets(true);
     try {
-      if (isLocalStorageMode) {
-        const config = sheetsConfig;
-        if (!config.connected || !config.spreadsheetId) {
-          throw new Error('Spreadsheet belum terhubung. Konfigurasikan ID Spreadsheet terlebih dahulu.');
-        }
-
-        // Run direct client-side sync
-        await syncToSheetsClient(config.spreadsheetId, token, transactions, config);
-
-        // Fetch back updated config / wallets
-        const dompetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values/Dompet!A2:C10`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        let updatedUser1Wallet = config.user1Wallet;
-        let updatedUser2Wallet = config.user2Wallet;
-        let updatedUser1Name = config.user1Name;
-        let updatedUser2Name = config.user2Name;
-
-        if (dompetRes.ok) {
-          const dData = await dompetRes.json();
-          const vals = dData.values || [];
-          const user1Row = vals.find((r: any) => r[0] === 'user1');
-          const user2Row = vals.find((r: any) => r[0] === 'user2');
-          if (user1Row) {
-            updatedUser1Name = user1Row[1] || updatedUser1Name;
-            updatedUser1Wallet = parseFloat(user1Row[2]) !== undefined && !isNaN(parseFloat(user1Row[2])) ? parseFloat(user1Row[2]) : updatedUser1Wallet;
-          }
-          if (user2Row) {
-            updatedUser2Name = user2Row[1] || updatedUser2Name;
-            updatedUser2Wallet = parseFloat(user2Row[2]) !== undefined && !isNaN(parseFloat(user2Row[2])) ? parseFloat(user2Row[2]) : updatedUser2Wallet;
-          }
-        }
-
-        const updatedConfig = {
-          ...config,
-          user1Name: updatedUser1Name,
-          user1Wallet: updatedUser1Wallet,
-          user2Name: updatedUser2Name,
-          user2Wallet: updatedUser2Wallet,
-          lastSyncedAt: new Date().toISOString(),
-          accessToken: token
-        };
-
-        // Update wallets in state
-        const updatedWallets = wallets.map(w => {
-          if (w.ownerId === 'Ry') {
-            return { ...w, name: updatedUser1Name, balance: updatedUser1Wallet };
-          }
-          if (w.ownerId === 'Partner') {
-            return { ...w, name: updatedUser2Name, balance: updatedUser2Wallet };
-          }
-          return w;
-        });
-
-        setWallets(updatedWallets);
-        setLocalStorageItem('money_tracker_wallets', updatedWallets);
-        setSheetsConfig(updatedConfig);
-        setLocalStorageItem('money_tracker_sheets_config', updatedConfig);
-        return;
+      const config = sheetsConfig;
+      if (!config.connected || !config.spreadsheetId) {
+        throw new Error('Spreadsheet belum terhubung. Konfigurasikan ID Spreadsheet terlebih dahulu.');
       }
 
-      const response = await fetch('/api/sheets/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken: token }),
+      // Run direct client-side sync
+      await syncToSheetsClient(config.spreadsheetId, token, transactions, config);
+
+      // Fetch back updated config / wallets
+      const dompetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values/Dompet!A2:C10`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      let updatedUser1Wallet = config.user1Wallet;
+      let updatedUser2Wallet = config.user2Wallet;
+      let updatedUser1Name = config.user1Name;
+      let updatedUser2Name = config.user2Name;
+
+      if (dompetRes.ok) {
+        const dData = await dompetRes.json();
+        const vals = dData.values || [];
+        const user1Row = vals.find((r: any) => r[0] === 'user1');
+        const user2Row = vals.find((r: any) => r[0] === 'user2');
+        if (user1Row) {
+          updatedUser1Name = user1Row[1] || updatedUser1Name;
+          updatedUser1Wallet = parseFloat(user1Row[2]) !== undefined && !isNaN(parseFloat(user1Row[2])) ? parseFloat(user1Row[2]) : updatedUser1Wallet;
+        }
+        if (user2Row) {
+          updatedUser2Name = user2Row[1] || updatedUser2Name;
+          updatedUser2Wallet = parseFloat(user2Row[2]) !== undefined && !isNaN(parseFloat(user2Row[2])) ? parseFloat(user2Row[2]) : updatedUser2Wallet;
+        }
+      }
+
+      const updatedConfig = {
+        ...config,
+        user1Name: updatedUser1Name,
+        user1Wallet: updatedUser1Wallet,
+        user2Name: updatedUser2Name,
+        user2Wallet: updatedUser2Wallet,
+        lastSyncedAt: new Date().toISOString(),
+        accessToken: token
+      };
+
+      // Update wallets in state
+      const updatedWallets = wallets.map(w => {
+        if (w.ownerId === 'Ry') {
+          return { ...w, name: updatedUser1Name, balance: updatedUser1Wallet };
+        }
+        if (w.ownerId === 'Partner') {
+          return { ...w, name: updatedUser2Name, balance: updatedUser2Wallet };
+        }
+        return w;
       });
 
-      const resJson = await response.json();
-      if (response.ok && resJson.success) {
-        setSheetsConfig(resJson.config);
-      } else {
-        throw new Error(resJson.message);
-      }
+      setWallets(updatedWallets);
+      setSheetsConfig(updatedConfig);
+    } catch (err) {
+      console.error('Failed syncing to Google Sheets:', err);
+      throw err;
     } finally {
       if (!silent) setSyncingSheets(false);
     }
@@ -1752,7 +1346,7 @@ export default function App() {
   };
 
   if (!user) {
-    return <Login onLoginSuccess={handleLoginSuccess} isLocalStorageMode={isLocalStorageMode} />;
+    return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
   const user1Name = sheetsConfig.user1Name || 'Ry';

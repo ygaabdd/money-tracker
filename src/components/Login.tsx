@@ -4,10 +4,9 @@ import { Lock, User, Eye, EyeOff, Wallet, Landmark } from 'lucide-react';
 
 interface LoginProps {
   onLoginSuccess: (user: { username: string }) => void;
-  isLocalStorageMode?: boolean;
 }
 
-export default function Login({ onLoginSuccess, isLocalStorageMode }: LoginProps) {
+export default function Login({ onLoginSuccess }: LoginProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -24,17 +23,6 @@ export default function Login({ onLoginSuccess, isLocalStorageMode }: LoginProps
     setLoading(true);
     setError(null);
 
-    if (isLocalStorageMode) {
-      setTimeout(() => {
-        if (username === 'adminry' && password === 'adminry') {
-          onLoginSuccess({ username: 'adminry' });
-        } else {
-          setError('Username atau password salah.');
-        }
-        setLoading(false);
-      }, 500);
-      return;
-    }
 
     try {
       const response = await fetch('/api/auth/login', {
@@ -88,7 +76,7 @@ export default function Login({ onLoginSuccess, isLocalStorageMode }: LoginProps
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
             </span>
-            {isLocalStorageMode ? "Mode Mandiri (Netlify / Static Ready)" : "Mode Server Aktif"}
+            Mode Server Aktif
           </div>
         </div>
 

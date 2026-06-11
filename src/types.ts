@@ -52,6 +52,7 @@ export interface SheetsConfig {
   user1Wallet?: number;
   user2Name?: string;
   user2Wallet?: number;
+  activeUserIdentity?: 'Ry' | 'Partner';
 }
 
 export type Category = 

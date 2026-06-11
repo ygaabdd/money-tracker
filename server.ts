@@ -28,11 +28,14 @@ if (isSupabaseEnabled) {
   console.log("Supabase URL or Key is missing from Environment. File Storage fallback is active.");
 }
 
+// Account ID (hardcoded for this app instance)
+const ACCOUNT_ID = "adminry";
+
 // WALLETS Helpers
 async function getSupabaseWallets() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("wallets").select("*");
+    const { data, error } = await supabase.from("wallets").select("*").eq("account_id", ACCOUNT_ID);
     if (error) {
       console.error("Supabase wallets fetch error:", error);
       return null;
@@ -60,7 +63,8 @@ async function insertSupabaseWallet(wallet: any) {
       type: wallet.type,
       balance: parseFloat(wallet.balance) || 0,
       ownerId: wallet.ownerId,
-      owner_id: wallet.ownerId // support snake_case
+      owner_id: wallet.ownerId, // support snake_case
+      account_id: ACCOUNT_ID
     };
     const { data, error } = await supabase.from("wallets").insert([payload]).select().single();
     if (error) {
@@ -110,7 +114,7 @@ async function deleteSupabaseWallet(id: string) {
 async function getSupabaseBudgets() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("budgets").select("*");
+    const { data, error } = await supabase.from("budgets").select("*").eq("account_id", ACCOUNT_ID);
     if (error) return null;
     return data.map((b: any) => ({
       id: b.id,
@@ -125,7 +129,8 @@ async function getSupabaseBudgets() {
 async function insertSupabaseBudget(budget: any) {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("budgets").insert([budget]).select().single();
+    const payload = { ...budget, account_id: ACCOUNT_ID };
+    const { data, error } = await supabase.from("budgets").insert([payload]).select().single();
     if (error) return null;
     return data;
   } catch (err) {
@@ -158,7 +163,7 @@ async function deleteSupabaseBudget(id: string) {
 async function getSupabaseDebts() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("debts").select("*");
+    const { data, error } = await supabase.from("debts").select("*").eq("account_id", ACCOUNT_ID);
     if (error) return null;
     return data.map((d: any) => ({
       id: d.id,
@@ -177,7 +182,8 @@ async function getSupabaseDebts() {
 async function insertSupabaseDebt(debt: any) {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("debts").insert([debt]).select().single();
+    const payload = { ...debt, account_id: ACCOUNT_ID };
+    const { data, error } = await supabase.from("debts").insert([payload]).select().single();
     if (error) return null;
     return data;
   } catch (err) {
@@ -210,7 +216,7 @@ async function deleteSupabaseDebt(id: string) {
 async function getSupabaseCategories() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("categories").select("*");
+    const { data, error } = await supabase.from("categories").select("*").eq("account_id", ACCOUNT_ID);
     if (error) return null;
     return data.map((c: any) => ({
       id: c.id,
@@ -226,7 +232,8 @@ async function getSupabaseCategories() {
 async function insertSupabaseCategory(category: any) {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("categories").insert([category]).select().single();
+    const payload = { ...category, account_id: ACCOUNT_ID };
+    const { data, error } = await supabase.from("categories").insert([payload]).select().single();
     if (error) return null;
     return data;
   } catch (err) {
@@ -248,7 +255,7 @@ async function deleteSupabaseCategory(id: string) {
 async function getSupabaseTransactions() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("transactions").select("*");
+    const { data, error } = await supabase.from("transactions").select("*").eq("account_id", ACCOUNT_ID);
     if (error) return null;
     return data.map((t: any) => ({
       id: t.id,
@@ -281,7 +288,8 @@ async function insertSupabaseTransaction(transaction: any) {
       createdAt: transaction.createdAt || new Date().toISOString(),
       created_at: transaction.createdAt || new Date().toISOString(),
       walletId: transaction.walletId || null,
-      wallet_id: transaction.walletId || null
+      wallet_id: transaction.walletId || null,
+      account_id: ACCOUNT_ID
     };
 
     const { data, error } = await supabase.from("transactions").insert([payload]).select().single();
@@ -488,6 +496,7 @@ function readConfig() {
         user1Wallet: parseFloat(parsed.user1Wallet) !== undefined && !isNaN(parseFloat(parsed.user1Wallet)) ? parseFloat(parsed.user1Wallet) : 0,
         user2Name: parsed.user2Name || "Partner",
         user2Wallet: parseFloat(parsed.user2Wallet) !== undefined && !isNaN(parseFloat(parsed.user2Wallet)) ? parseFloat(parsed.user2Wallet) : 0,
+        activeUserIdentity: parsed.activeUserIdentity === 'Partner' ? 'Partner' : 'Ry',
       };
     }
   } catch (error) {
@@ -504,6 +513,7 @@ function readConfig() {
     user1Wallet: 0,
     user2Name: "Partner",
     user2Wallet: 0,
+    activeUserIdentity: 'Ry',
   };
 }
 

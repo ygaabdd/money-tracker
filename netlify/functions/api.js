@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const ACCOUNT_ID = "adminry";
 const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const isSupabaseEnabled = !!(supabaseUrl && supabaseKey);
 const supabase = isSupabaseEnabled ? createClient(supabaseUrl, supabaseKey) : null;
 
@@ -392,7 +392,7 @@ const handler = async (event) => {
         if (!supabase) {
           return jsonResponse(500, {
             success: false,
-            message: "Supabase belum dikonfigurasi. Pastikan SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY telah diset di environment Netlify.",
+            message: "Supabase belum dikonfigurasi. Pastikan SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY telah diset di environment Netlify.",
           });
         }
 
@@ -403,8 +403,22 @@ const handler = async (event) => {
           balance: parseFloat(body.balance) || 0,
           ownerId: body.ownerId || "Ry",
         };
-        const wallet = await insertSupabaseWallet(newWallet);
-        return wallet ? jsonResponse(200, { success: true, wallet }) : jsonResponse(500, { success: false, message: "Failed saving wallet" });
+        const { data, error } = await supabase.from("wallets").insert([{
+          ...newWallet,
+          owner_id: newWallet.ownerId,
+          account_id: ACCOUNT_ID,
+        }]).select().single();
+
+        if (error) {
+          console.error("insert wallet error:", error);
+          return jsonResponse(500, {
+            success: false,
+            message: "Failed saving wallet",
+            error: { message: error.message, details: error.details, hint: error.hint, code: error.code },
+          });
+        }
+
+        return jsonResponse(200, { success: true, wallet: data });
       }
       if (resourceId && method === "PUT") {
         const updates = {

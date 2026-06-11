@@ -35,11 +35,13 @@ const ACCOUNT_ID = "adminry";
 async function getSupabaseWallets() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("wallets").select("*").eq("account_id", ACCOUNT_ID);
+    const { data, error } = await supabase.from("wallets").select("*");
+
     if (error) {
-      console.error("Supabase wallets fetch error:", error);
+      console.error("[Supabase get wallets] error", { message: error.message, details: (error as any).details, hint: (error as any).hint });
       return null;
     }
+
     // Try to normalize keys of some structures in case they were made using snake_case
     return data.map((w: any) => ({
       id: w.id,
@@ -55,7 +57,10 @@ async function getSupabaseWallets() {
 }
 
 async function insertSupabaseWallet(wallet: any) {
-  if (!supabase) return null;
+  if (!supabase) {
+    console.error("[Supabase disabled] insertSupabaseWallet");
+    return null;
+  }
   try {
     const payload = {
       id: wallet.id,
@@ -63,30 +68,39 @@ async function insertSupabaseWallet(wallet: any) {
       type: wallet.type,
       balance: parseFloat(wallet.balance) || 0,
       ownerId: wallet.ownerId,
-      owner_id: wallet.ownerId, // support snake_case
-      account_id: ACCOUNT_ID
+      owner_id: wallet.ownerId // support snake_case
     };
+
     const { data, error } = await supabase.from("wallets").insert([payload]).select().single();
+
     if (error) {
+       console.error("[Supabase insert wallets] error", { payload, message: error.message, details: (error as any).details, hint: (error as any).hint });
        // fallback without snake_case or vice-versa
        const cleanPayload = { id: wallet.id, name: wallet.name, type: wallet.type, balance: parseFloat(wallet.balance) || 0 };
        const { data: fallbackData, error: fbErr } = await supabase.from("wallets").insert([cleanPayload]).select().single();
-       if (fbErr) return null;
+       if (fbErr) {
+         console.error("[Supabase insert wallets fallback] error", { cleanPayload, message: fbErr.message, details: (fbErr as any).details, hint: (fbErr as any).hint });
+         return null;
+       }
        return fallbackData;
     }
     return data;
-  } catch (err) {
+  } catch (err: any) {
+    console.error("[Supabase insert wallets] catch", { err });
     return null;
   }
 }
+
 
 async function updateSupabaseWallet(id: string, updates: any) {
   if (!supabase) return null;
   try {
     const { data, error } = await supabase.from("wallets").update(updates).eq("id", id).select().single();
     if (error) {
+      console.error("[Supabase update wallets] error", { id, updates, message: error.message, details: (error as any).details, hint: (error as any).hint });
       // Try mapping only standard columns
       const cleanUpdate: any = {};
+
       if (updates.name !== undefined) cleanUpdate.name = updates.name;
       if (updates.type !== undefined) cleanUpdate.type = updates.type;
       if (updates.balance !== undefined) cleanUpdate.balance = parseFloat(updates.balance);
@@ -114,8 +128,13 @@ async function deleteSupabaseWallet(id: string) {
 async function getSupabaseBudgets() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("budgets").select("*").eq("account_id", ACCOUNT_ID);
-    if (error) return null;
+    const { data, error } = await supabase.from("budgets").select("*");
+
+    if (error) {
+      console.error("[Supabase get budgets] error", { message: error.message, details: (error as any).details, hint: (error as any).hint });
+      return null;
+    }
+
     return data.map((b: any) => ({
       id: b.id,
       category: b.category,
@@ -129,9 +148,14 @@ async function getSupabaseBudgets() {
 async function insertSupabaseBudget(budget: any) {
   if (!supabase) return null;
   try {
-    const payload = { ...budget, account_id: ACCOUNT_ID };
+    const payload = { ...budget };
+
     const { data, error } = await supabase.from("budgets").insert([payload]).select().single();
-    if (error) return null;
+    if (error) {
+      console.error("[Supabase insert budgets] error", { payload, message: error.message, details: (error as any).details, hint: (error as any).hint });
+      return null;
+    }
+
     return data;
   } catch (err) {
     return null;
@@ -163,8 +187,13 @@ async function deleteSupabaseBudget(id: string) {
 async function getSupabaseDebts() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("debts").select("*").eq("account_id", ACCOUNT_ID);
-    if (error) return null;
+    const { data, error } = await supabase.from("debts").select("*");
+
+    if (error) {
+      console.error("[Supabase get debts] error", { message: error.message, details: (error as any).details, hint: (error as any).hint });
+      return null;
+    }
+
     return data.map((d: any) => ({
       id: d.id,
       title: d.title,
@@ -182,9 +211,14 @@ async function getSupabaseDebts() {
 async function insertSupabaseDebt(debt: any) {
   if (!supabase) return null;
   try {
-    const payload = { ...debt, account_id: ACCOUNT_ID };
+    const payload = { ...debt };
+
     const { data, error } = await supabase.from("debts").insert([payload]).select().single();
-    if (error) return null;
+    if (error) {
+      console.error("[Supabase insert debts] error", { payload, message: error.message, details: (error as any).details, hint: (error as any).hint });
+      return null;
+    }
+
     return data;
   } catch (err) {
     return null;
@@ -216,8 +250,13 @@ async function deleteSupabaseDebt(id: string) {
 async function getSupabaseCategories() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("categories").select("*").eq("account_id", ACCOUNT_ID);
-    if (error) return null;
+    const { data, error } = await supabase.from("categories").select("*");
+
+    if (error) {
+      console.error("[Supabase get categories] error", { message: error.message, details: (error as any).details, hint: (error as any).hint });
+      return null;
+    }
+
     return data.map((c: any) => ({
       id: c.id,
       name: c.name,
@@ -232,10 +271,15 @@ async function getSupabaseCategories() {
 async function insertSupabaseCategory(category: any) {
   if (!supabase) return null;
   try {
-    const payload = { ...category, account_id: ACCOUNT_ID };
+    const payload = { ...category };
+
     const { data, error } = await supabase.from("categories").insert([payload]).select().single();
-    if (error) return null;
+    if (error) {
+      console.error("[Supabase insert categories] error", { payload, message: error.message, details: (error as any).details, hint: (error as any).hint });
+      return null;
+    }
     return data;
+
   } catch (err) {
     return null;
   }
@@ -255,8 +299,13 @@ async function deleteSupabaseCategory(id: string) {
 async function getSupabaseTransactions() {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from("transactions").select("*").eq("account_id", ACCOUNT_ID);
-    if (error) return null;
+    const { data, error } = await supabase.from("transactions").select("*");
+
+    if (error) {
+      console.error("[Supabase get transactions] error", { message: error.message, details: (error as any).details, hint: (error as any).hint });
+      return null;
+    }
+
     return data.map((t: any) => ({
       id: t.id,
       date: t.date,
@@ -288,13 +337,14 @@ async function insertSupabaseTransaction(transaction: any) {
       createdAt: transaction.createdAt || new Date().toISOString(),
       created_at: transaction.createdAt || new Date().toISOString(),
       walletId: transaction.walletId || null,
-      wallet_id: transaction.walletId || null,
-      account_id: ACCOUNT_ID
+      wallet_id: transaction.walletId || null
     };
 
     const { data, error } = await supabase.from("transactions").insert([payload]).select().single();
     if (error) {
+       console.error("[Supabase insert transactions] error", { payload, message: error.message, details: (error as any).details, hint: (error as any).hint });
        // fallback without snake case
+
        const cleanPayload = {
          id: transaction.id,
          date: transaction.date,
@@ -317,15 +367,18 @@ async function updateSupabaseTransaction(id: string, updates: any) {
   if (!supabase) return null;
   try {
     const payload: any = { ...updates };
+
     if (updates.addedBy !== undefined) {
       payload.added_by = updates.addedBy;
     }
     if (updates.walletId !== undefined) {
       payload.wallet_id = updates.walletId;
     }
-    const { data, error } = await supabase.from("transactions").update(payload).eq("id", id).select().single();
+const { data, error } = await supabase.from("transactions").update(payload).eq("id", id).select().single();
     if (error) {
+       console.error("[Supabase update transactions] error", { id, payload, message: error.message, details: (error as any).details, hint: (error as any).hint });
        // remove camel/snake fields that might fail and retry
+
        const cleanUpdate = { ...updates };
        delete cleanUpdate.addedBy;
        delete cleanUpdate.walletId;

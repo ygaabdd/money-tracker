@@ -513,9 +513,15 @@ export default function App() {
       });
       if (response.ok) {
         fetchData(true);
+      } else {
+        const errorBody = await response.json().catch(() => null);
+        const message = errorBody?.message || 'Gagal menyimpan dompet. Periksa koneksi dan konfigurasi server.';
+        setErrorBanner(message);
+        console.error('Failed saving wallet:', message, errorBody);
       }
     } catch (err) {
       console.error('Failed saving wallet:', err);
+      setErrorBanner('Gagal menyimpan dompet karena masalah jaringan. Pastikan server aktif.');
     }
   };
 

@@ -389,6 +389,13 @@ const handler = async (event) => {
         return jsonResponse(200, { success: true, wallets: wallets || [] });
       }
       if (method === "POST") {
+        if (!supabase) {
+          return jsonResponse(500, {
+            success: false,
+            message: "Supabase belum dikonfigurasi. Pastikan SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY telah diset di environment Netlify.",
+          });
+        }
+
         const newWallet = {
           id: `w-${Date.now()}`,
           name: body.name || "Dompet Baru",

@@ -47,8 +47,7 @@ async function getSupabaseWallets() {
       id: w.id,
       name: w.name,
       type: w.type,
-      balance: parseFloat(w.balance) || 0,
-      ownerId: w.ownerId || w.owner_id || "Ry"
+      balance: parseFloat(w.balance) || 0
     }));
   } catch (err) {
     console.error("Supabase wallets catch:", err);
@@ -67,8 +66,6 @@ async function insertSupabaseWallet(wallet: any) {
       name: wallet.name,
       type: wallet.type,
       balance: parseFloat(wallet.balance) || 0,
-      ownerId: wallet.ownerId,
-      owner_id: wallet.ownerId // support snake_case
     };
 
     const { data, error } = await supabase.from("wallets").insert([payload]).select().single();
@@ -110,6 +107,7 @@ async function updateSupabaseWallet(id: string, updates: any) {
     }
     return data;
   } catch (err) {
+    console.error("[Supabase update wallets] catch", err);
     return null;
   }
 }
@@ -643,8 +641,6 @@ app.put("/api/wallets/:id", async (req, res) => {
     name: req.body.name,
     type: req.body.type,
     balance: req.body.balance !== undefined ? parseFloat(req.body.balance) : undefined,
-    ownerId: req.body.ownerId,
-    owner_id: req.body.ownerId
   };
   Object.keys(updates).forEach(key => (updates as any)[key] === undefined && delete (updates as any)[key]);
 
@@ -661,7 +657,6 @@ app.put("/api/wallets/:id", async (req, res) => {
       name: req.body.name !== undefined ? req.body.name : wallets[idx].name,
       type: req.body.type !== undefined ? req.body.type : wallets[idx].type,
       balance: req.body.balance !== undefined ? parseFloat(req.body.balance) : wallets[idx].balance,
-      ownerId: req.body.ownerId !== undefined ? req.body.ownerId : (wallets[idx].ownerId || "Ry")
     };
     writeWallets(wallets);
     res.json({ success: true, wallet: wallets[idx] });
